@@ -1,0 +1,22 @@
+sender_address: your@email.address
+accounts:
+    # every bank account must start with one indentation
+    # the line contains the name of the account
+    Account 1:
+        # the following fields must be provided:
+        # account_number
+        # branch_code
+        # password
+        enabled: false
+        account_number: <account number here>
+        sub_account: <sub account number here>
+        branch_code: <branch code here>
+        password: <password/PIN here>
+        recipients: your@email.address
+    Account 2:
+        enabled: false
+        account_number: <account number here>
+        sub_account: <sub account number here>
+        branch_code: <branch code here>
+        password: <password/PIN here>
+        recipients: your@email.address
