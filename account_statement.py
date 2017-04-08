@@ -44,11 +44,21 @@ try:
     from urlparse import urljoin # Python2
 except ImportError:
     from urllib.parse import urljoin # Python3
-import cookielib
-from cookielib import CookieJar, DefaultCookiePolicy
+
+import requests
+from socket import error as SocketError
+import errno
+
 import smtplib
 from email.mime.text import MIMEText
-import HTMLParser
+
+_htmlparser_version = False
+try:
+    import html.parser
+    _htmlparser_version = 3
+except ImportError:
+    import HTMLParser
+    _htmlparser_version = 2
 
 
 # start with 'info', can be overriden by '-q' later on
@@ -748,150 +758,62 @@ def human_size(size_bytes):
 #
 # parameter:
 #  - url
-#  - cookies object
+#  - requests object
 #  - data (optional, dictionary)
 # return:
 #  - content of the link
-def get_url(url, cookies, data = None):
-    global _urllib_version
+def get_url(url, session, data = None):
 
-    # patches are only used in interactive mode
-    # it's ok to break here if something does not work as expected
-    if (_urllib_version == 2):
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests.packages.urllib3").setLevel(logging.WARNING)
+    logging.getLogger("httplib").setLevel(logging.WARNING)
+    # set language to 'German', all content will be rendered in German and all functionality is available
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1',
+               'Accept-Encoding': 'gzip, deflate',
+               'Accept-Language' : 'de'}
 
-        handlers = [
-            urllib2.HTTPHandler(debuglevel = 0),
-            urllib2.HTTPSHandler(debuglevel = 0),
-            urllib2.HTTPCookieProcessor(cookies)
-        ]
-        opener = urllib2.build_opener(*handlers)
-
-        if (data is None):
-            rq = urllib2.Request(url)
-        else:
-            data2 = urllib.urlencode(data)
-            rq = urllib2.Request(url, data2)
-        rq.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1')
-        rq.add_header('Accept-encoding', 'gzip')
-        # set language to 'German', all content will be rendered in German and all functionality is available
-        rq.add_header('Accept-Language', 'de')
-
-        try:
-            #rs = urllib2.urlopen(rq)
-            rs = opener.open(rq)
-        except urllib2.HTTPError as e:
-            if (e.code == 400):
-                logging.error('HTTPError = ' + str(e.code) + ' (Bad Request)')
-            elif (e.code == 401):
-                logging.error('HTTPError = ' + str(e.code) + ' (Unauthorized)')
-            elif (e.code == 403):
-                logging.error('HTTPError = ' + str(e.code) + ' (Forbidden)')
-            elif (e.code == 404):
-                logging.error('HTTPError = ' + str(e.code) + ' (URL not found)')
-            elif (e.code == 408):
-                logging.error('HTTPError = ' + str(e.code) + ' (Request Timeout)')
-            elif (e.code == 418):
-                logging.error('HTTPError = ' + str(e.code) + " (I'm a teapot)")
-            elif (e.code == 500):
-                logging.error('HTTPError = ' + str(e.code) + ' (Internal Server Error)')
-            elif (e.code == 502):
-                logging.error('HTTPError = ' + str(e.code) + ' (Bad Gateway)')
-            elif (e.code == 503):
-                logging.error('HTTPError = ' + str(e.code) + ' (Service Unavailable)')
-            elif (e.code == 504):
-                logging.error('HTTPError = ' + str(e.code) + ' (Gateway Timeout)')
-            else:
-                logging.error('HTTPError = ' + str(e.code))
-            sys.exit(1)
-        except urllib2.URLError as e:
-            logging.error('URLError = ' + str(e.reason))
-            sys.exit(1)
-        except httplib.HTTPException as e:
-            logging.error('HTTPException')
-            sys.exit(1)
-        #except Exception:
-        #    logging.error('generic exception')
-        #    sys.exit(1)
-
-        if rs.info().get('Content-Encoding') == 'gzip':
-            b = StringIO(rs.read())
-            f = gzip.GzipFile(fileobj = b)
-            data = f.read()
-        else:
-            data = rs.read()
-
-    elif (_urllib_version == 3):
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-        logging.getLogger("httplib").setLevel(logging.WARNING)
-        # set language to 'German', all content will be rendered in German and all functionality is available
-        user_agent = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1',
-                      'Accept-Encoding': 'gzip, deflate',
-                      'Accept-Language' : 'de'}
-        #http = urllib3.PoolManager(maxsize = 3, retries = 2, headers = user_agent)
-        http = urllib3.PoolManager(maxsize = 3, headers = user_agent)
-
-        # FIXME: cookie handling for urllib v3 is not yet implemented
-        logging.error("Fix cookies!")
-        sys.exit(1)
-
-        try:
-            rs = http.urlopen('GET', url, redirect = True)
-        except urllib3.exceptions.MaxRetryError as e:
-            logging.error("Too many retries")
-            sys.exit(1)
-        except urllib3.URLError as e:
-            logging.error('URLError = ' + str(e.code))
-            sys.exit(1)
-        except httplib.HTTPException as e:
-            logging.error('HTTPException')
-            sys.exit(1)
-        except urllib3.exceptions.ConnectTimeoutError as e:
-            logging.error("Timeout")
-            sys.exit(1)
-        except Exception:
-            logging.error('generic exception')
-            sys.exit(1)
-
-        if (rs.status != 200):
-            if (rs.status == 400):
-                logging.error("HTTPError = 400 (Bad Request)")
-            elif (rs.status == 401):
-                logging.error("HTTPError = 401 (Unauthorized)")
-            elif (rs.status == 403):
-                logging.error("HTTPError = 403 (Forbidden)")
-            elif (rs.status == 404):
-                logging.error("HTTPError = 404 (URL not found)")
-            elif (rs.status == 408):
-                logging.error("HTTPError = 408 (Request Timeout)")
-            elif (rs.status == 418):
-                logging.error("HTTPError = 418 (I'm a teapot)")
-            elif (rs.status == 500):
-                logging.error("HTTPError = 500 (Internal Server Error)")
-            elif (rs.status == 502):
-                logging.error("HTTPError = 502 (Bad Gateway)")
-            elif (rs.status == 503):
-                logging.error("HTTPError = 503 (Service Unavailable)")
-            elif (rs.status == 504):
-                logging.error("HTTPError = 504 (Gateway Timeout)")
-            else:
-                logging.error("HTTPError = " + str(rs.status) + "")
-            sys.exit(1)
-
-        if (len(rs.data.decode()) == 0):
-            logging.error("failed to download the url")
-            sys.exit(1)
-
-        data = rs.data.decode()
-
+    if (data is None):
+        # GET request
+        rs = session.request('GET', url, headers = headers)
     else:
-        logging.error("unknown urllib version!")
+        # POST request
+        rs = session.request('POST', url, data = data, headers = headers)
+
+
+    if (rs.status_code != 200):
+        if (rs.status_code == 400):
+            logging.error("HTTPError = 400 (Bad Request)")
+        elif (rs.status_code == 401):
+            logging.error("HTTPError = 401 (Unauthorized)")
+        elif (rs.status_code == 403):
+            logging.error("HTTPError = 403 (Forbidden)")
+        elif (rs.status_code == 404):
+            logging.error("HTTPError = 404 (URL not found)")
+        elif (rs.status_code == 408):
+            logging.error("HTTPError = 408 (Request Timeout)")
+        elif (rs.status_code == 418):
+            logging.error("HTTPError = 418 (I'm a teapot)")
+        elif (rs.status_code == 500):
+            logging.error("HTTPError = 500 (Internal Server Error)")
+        elif (rs.status_code == 502):
+            logging.error("HTTPError = 502 (Bad Gateway)")
+        elif (rs.status_code == 503):
+            logging.error("HTTPError = 503 (Service Unavailable)")
+        elif (rs.status_code == 504):
+            logging.error("HTTPError = 504 (Gateway Timeout)")
+        else:
+            logging.error("HTTPError = " + str(rs.status_code) + "")
         sys.exit(1)
 
+    if (len(rs.text) == 0):
+        logging.error("failed to download the url")
+        sys.exit(1)
+
+    data = rs.text
 
     logging.debug("fetched " + human_size(len(data)))
 
     return data
-
 
 
 
@@ -997,8 +919,8 @@ def extract_form_data(form_content, base_url):
 #
 # parameter:
 #  - account data
-#  - cookie handle
-def retrieve_bank_account_data(account, cookies):
+#  - requests handle
+def retrieve_bank_account_data(account, session):
 
     # Note: the following code is not very nice, because it has to deal with multiple requests
     #       (main website, banking website, login, account overview, data extract) and find the
@@ -1011,7 +933,7 @@ def retrieve_bank_account_data(account, cookies):
 
 
     # fetch main website
-    req = get_url(url, cookies)
+    req = get_url(url, session)
     #print(req)
     l_r = re.search(b'<a .*?href="(.+?)".*?>.*?Online\-Banking.*?<\/a>', req)
     if (l_r):
@@ -1023,7 +945,7 @@ def retrieve_bank_account_data(account, cookies):
 
 
     # fetch Online Banking page
-    req2 = get_url(url2, cookies)
+    req2 = get_url(url2, session)
 
     # the result should only have one <form> object
     l2_r_forms = re.search(b'<form.+<form', req2)
@@ -1065,7 +987,7 @@ def retrieve_bank_account_data(account, cookies):
     #sys.exit(0)
 
 
-    req3 = get_url(url3, cookies, data3['fields'])
+    req3 = get_url(url3, session, data3['fields'])
 
 
     # need the link to "Konten"
@@ -1080,7 +1002,7 @@ def retrieve_bank_account_data(account, cookies):
         print("Can't identify link for 'Konten'")
         sys.exit(1)
     logging.debug("next link (4): " + url4)
-    req4 = get_url(url4, cookies)
+    req4 = get_url(url4, session)
 
 
     l4_r_form = re.search(b'(<form.+?id="accountTurnoversForm".+?action=".+?".*?>.*?<\/form>)', req4, re.DOTALL)
@@ -1112,7 +1034,7 @@ def retrieve_bank_account_data(account, cookies):
     data4['fields']['subaccountAndCurrency'] = "%02d" % account['sub_account']
 
 
-    req5 = get_url(url5, cookies, data4['fields'])
+    req5 = get_url(url5, session, data4['fields'])
 
     #print(req5)
 
@@ -1330,9 +1252,8 @@ for account in config.configfile['accounts']:
                                          config.configfile['accounts'][account]['sub_account'],
                                          config.configfile['accounts'][account]['branch_code'])
     logging.debug("Database id for account is: " + str(account_id))
-    policy = DefaultCookiePolicy(rfc2965 = True, strict_ns_domain = DefaultCookiePolicy.DomainStrict)
-    cookies = cookielib.CookieJar(policy)
-    account_data = retrieve_bank_account_data(config.configfile['accounts'][account], cookies)
+    session = requests.session()
+    account_data = retrieve_bank_account_data(config.configfile['accounts'][account], session)
 
     database.save_account_amount(account_id, account_data['bank_balance'], account_data['bank_balance_currency'])
     database.save_account_transactions(account_id, account_data['bookings'])
