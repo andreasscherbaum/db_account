@@ -937,113 +937,119 @@ def retrieve_bank_account_data(account, session):
     #print(req)
     l_r = re.search(b'<a .*?href="(.+?)".*?>.*?Online\-Banking.*?<\/a>', req)
     if (l_r):
-        url2 = str(l_r.group(1).decode())
-        logging.debug("next link (2): " + url2)
+        url_banking = str(l_r.group(1).decode())
+        logging.debug("next link (2): " + url_banking)
     else:
         logging.error("Can't identify link to Online Banking!")
         sys.exit(1)
 
 
     # fetch Online Banking page
-    req2 = get_url(url2, session)
+    req_banking = get_url(url_banking, session)
+    req_banking = remove_cookie_consent_box(req_banking)
 
     # the result should only have one <form> object
-    l2_r_forms = re.search(b'<form.+<form', req2)
-    if (l2_r_forms):
+    l_banking_r_forms = re.search(b'<form.+<form', req_banking, re.DOTALL)
+    if (l_banking_r_forms):
         logging.error("Found multiple forms in login page!")
         sys.exit(1)
 
 
-    l2_r_form = re.search(b'(<form.+?action=".+?".*?>.*<\/form>)', req2, re.DOTALL)
-    if (l2_r_form):
-        form3_content = str(l2_r_form.group(1))
+    l_banking_r_form = re.search(b'(<form.+?action=".+?".*?>.*<\/form>)', req_banking, re.DOTALL)
+    if (l_banking_r_form):
+        form_login_content = str(l_banking_r_form.group(1))
     else:
         logging.error("Can't extract form from login page!")
         sys.exit(1)
 
-    data3 = extract_form_data(form3_content, url2)
-    url3 = data3['action']
+    #print(form_login_content)
+    data_login = extract_form_data(form_login_content, url_banking)
+    url_login = data_login['action']
 
-    #print(req2)
-    logging.debug("next link (3): " + data3['action'])
+    #print(req_banking)
+    logging.debug("next link (3): " + url_login)
 
 
     # verify that the form has all fields we need for login
     for check in ['branch', 'account', 'subaccount', 'pin']:
         try:
-            t = data3['fields'][check]
+            t = data_login['fields'][check]
         except KeyError:
             print("")
             print("Error: missing '" + str(check) + "' in login form")
             sys.exit(1)
 
     # fill in login values
-    data3['fields']['branch'] = account['branch_code']
-    data3['fields']['account'] = account['account_number']
-    data3['fields']['subaccount'] = "%02d" % account['sub_account']
-    data3['fields']['pin'] = account['password']
+    data_login['fields']['branch'] = account['branch_code']
+    data_login['fields']['account'] = account['account_number']
+    data_login['fields']['subaccount'] = "%02d" % account['sub_account']
+    data_login['fields']['pin'] = account['password']
 
-    #print(data3)
+    #print(data_login)
+    #print(form_login_content)
     #sys.exit(0)
 
 
-    req3 = get_url(url3, session, data3['fields'])
+    # login into website
+    req_login = get_url(url_login, session, data_login['fields'])
+    #print(req_login)
+    #sys.exit(0)
 
 
     # need the link to "Konten"
-    url4 = False
-    for line in form3_content.splitlines(True):
-        l4_r = re.search(b'<a href="(.+?)".*?>Konten<\/a>', req3)
-        if (l4_r):
-            url4 = urljoin(url3, str(l4_r.group(1).decode()))
+    url_accounts = False
+    for line in form_login_content.splitlines(True):
+        l_accounts_r = re.search(b'<a href="(.+?)".*?>Konten<\/a>', req_login)
+        if (l_accounts_r):
+            url_accounts = urljoin(url_login, str(l_accounts_r.group(1).decode()))
             break
-    if (url4 is False):
+    if (url_accounts is False):
         print("")
         print("Can't identify link for 'Konten'")
         sys.exit(1)
-    logging.debug("next link (4): " + url4)
-    req4 = get_url(url4, session)
+    logging.debug("next link (4): " + url_accounts)
+    req_accounts = get_url(url_accounts, session)
 
 
-    l4_r_form = re.search(b'(<form.+?id="accountTurnoversForm".+?action=".+?".*?>.*?<\/form>)', req4, re.DOTALL)
-    if (l4_r_form):
-        form4_content = str(l4_r_form.group(1))
+    l_accounts_r_form = re.search(b'(<form.+?id="accountTurnoversForm".+?action=".+?".*?>.*?<\/form>)', req_accounts, re.DOTALL)
+    if (l_accounts_r_form):
+        form_accounts_content = str(l_accounts_r_form.group(1))
     else:
         logging.error("Can't extract form from accounts page!")
         sys.exit(1)
 
-    data4 = extract_form_data(form4_content, url4)
-    url5 = data4['action']
+    data_accounts = extract_form_data(form_accounts_content, url_accounts)
+    url_data = data_accounts['action']
 
     #print(req2)
-    logging.debug("next link (5): " + data4['action'])
-    #print(data4['fields'])
+    logging.debug("next link (5): " + data_accounts['action'])
+    #print(data_accounts['fields'])
 
     # verify that the form has all fields we need to retrieve account movements
     for check in ['period', 'periodDays']:
         try:
-            t = data4['fields'][check]
+            t = data_accounts['fields'][check]
         except KeyError:
             print("")
             print("Error: missing '" + str(check) + "' in data form")
             sys.exit(1)
 
     # set required values
-    data4['fields']['periodDays'] = '180'
-    data4['fields']['period'] = 'fixedRange'
-    data4['fields']['subaccountAndCurrency'] = "%02d" % account['sub_account']
+    data_accounts['fields']['periodDays'] = '180'
+    data_accounts['fields']['period'] = 'fixedRange'
+    data_accounts['fields']['subaccountAndCurrency'] = "%02d" % account['sub_account']
 
 
-    req5 = get_url(url5, session, data4['fields'])
+    req_data = get_url(url_data, session, data_accounts['fields'])
 
-    #print(req5)
+    #print(req_data)
 
 
     # extract the booking data
     account_data = {}
     account_data['bank_balance'] = None
     account_data['bank_balance_currency'] = None
-    bookings = re.search(b'<... Display bookedTurnovers.+?>(.+?)<... If there are no turnovers existent .+? shown above ..>', req5, re.DOTALL)
+    bookings = re.search(b'<... Display bookedTurnovers.+?>(.+?)<... If there are no turnovers existent .+? shown above ..>', req_data, re.DOTALL)
     if (bookings):
         try:
             bookings_data = str(bookings.group(1).decode())
@@ -1184,7 +1190,7 @@ def retrieve_bank_account_data(account, session):
         sys.exit(1)
 
 
-    current_amount = re.search(b'>Aktueller Kontostand<.+?class="balance credit"><strong>\s*([0-9,\.\-]+)\s*<\/strong>', req5, re.DOTALL | re.MULTILINE)
+    current_amount = re.search(b'>Aktueller Kontostand<.+?class="balance credit"><strong>\s*([0-9,\.\-]+)\s*<\/strong>', req_data, re.DOTALL | re.MULTILINE)
     if (current_amount):
         #print(fix_punctation(current_amount.group(1).decode()))
         account_data['bank_balance'] = str(fix_punctation(current_amount.group(1).decode()))
@@ -1194,7 +1200,7 @@ def retrieve_bank_account_data(account, session):
         sys.exit(1)
 
 
-    current_amount_currency = re.search(b'>Aktueller Kontostand<.+?class="balance credit">.+?<\/strong>.+?<strong.*?><acronym.*?>(.+?)<\/acronym', req5, re.DOTALL | re.MULTILINE)
+    current_amount_currency = re.search(b'>Aktueller Kontostand<.+?class="balance credit">.+?<\/strong>.+?<strong.*?><acronym.*?>(.+?)<\/acronym', req_data, re.DOTALL | re.MULTILINE)
     if (current_amount_currency):
         account_data['bank_balance_currency'] = str(current_amount_currency.group(1).decode())
     else:
@@ -1226,6 +1232,20 @@ def fix_punctation(amount):
     # the german output splits the thousands by a dot, and the cents by a comma
     return amount.replace('.', '').replace(',', '.')
 
+
+
+# remove_cookie_consent_box()
+#
+# remove div and form with cookie consent box
+#
+# parameter:
+#  - HTML content
+# return:
+#  - HTML content
+def remove_cookie_consent_box(content):
+    content = re.sub(r'<div id="cookieConsentBox">.+?<form.*?</form>.*?</div>.*?</div>', '', content, flags=re.DOTALL)
+
+    return content
 
 
 
