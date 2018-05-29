@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # extract bank account information from a DB account
 #
@@ -55,6 +55,7 @@ from email.mime.text import MIMEText
 _htmlparser_version = False
 try:
     import html.parser
+    from html.parser import HTMLParser
     _htmlparser_version = 3
 except ImportError:
     import HTMLParser
@@ -615,7 +616,7 @@ class Database:
                           AND amount = ?
                           AND currency= ?"""
             result = self.execute_query(query, [account_id, transaction['date_of_bookkeeping'], transaction['date_of_value'],
-                                                unicode(transaction['intended_use']), unicode(transaction['intended_use2']), transaction['iban'],
+                                                transaction['intended_use'], transaction['intended_use2'], transaction['iban'],
                                                 transaction['bic'], transaction['customer_reference'], transaction['mandate_reference'],
                                                 transaction['creditor_id'], transaction['amount'], transaction['currency']])
             if (len(result) > 1):
@@ -629,7 +630,7 @@ class Database:
                                         creditor_id, amount, currency)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
                 self.execute_one(query, [transaction['date_of_bookkeeping'], transaction['date_of_value'], account_id,
-                                         unicode(transaction['intended_use']), unicode(transaction['intended_use2']), transaction['iban'],
+                                         transaction['intended_use'], transaction['intended_use2'], transaction['iban'],
                                          transaction['bic'], transaction['customer_reference'], transaction['mandate_reference'],
                                          transaction['creditor_id'], transaction['amount'], transaction['currency']])
                 logging.debug("Write booking entry: " + str(transaction['date_of_bookkeeping']) + '/' +
@@ -832,10 +833,10 @@ def extract_form_data(form_content, base_url):
     data['fields'] = {}
 
     # first extract the target for the form
-    form_action = re.search(b'<form.+?action="(.+?)".*?>(.*)<\/form>', form_content, re.DOTALL)
+    form_action = re.search('<form.+?action="(.+?)".*?>(.*)<\/form>', form_content, re.DOTALL)
     if (form_action):
         # and normalize it
-        data['action'] = urljoin(base_url, str(form_action.group(1).decode()))
+        data['action'] = urljoin(base_url, str(form_action.group(1)))
         form3_inner_content = str(form_action.group(2))
     else:
         # not finding a target is a problem
@@ -847,67 +848,67 @@ def extract_form_data(form_content, base_url):
     for line in form3_inner_content.splitlines(True):
         #print("line: " + line)
         # this assumes that the field is in one line
-        line_hidden = re.search(b'<input type.*?=.*?"hidden".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"', line)
+        line_hidden = re.search('<input type.*?=.*?"hidden".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"', line)
         if (line_hidden):
-            logging.debug("found   hidden: " + str(line_hidden.group(1).decode()) + " = '" + str(line_hidden.group(2).decode()) + "'")
-            data['fields'][str(line_hidden.group(1).decode())] = str(line_hidden.group(2).decode())
+            logging.debug("found   hidden: " + str(line_hidden.group(1)) + " = '" + str(line_hidden.group(2)) + "'")
+            data['fields'][str(line_hidden.group(1))] = str(line_hidden.group(2))
 
 
         # this assumes that the field is in one line
-        line_text = re.search(b'<input type.*?=.*?"text".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"', line)
+        line_text = re.search('<input type.*?=.*?"text".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"', line)
         if (line_text):
-            logging.debug("found     text: " + str(line_text.group(1).decode()) + " = '" + str(line_text.group(2).decode()) + "'")
-            data['fields'][str(line_text.group(1).decode())] = str(line_text.group(2).decode())
+            logging.debug("found     text: " + str(line_text.group(1)) + " = '" + str(line_text.group(2)) + "'")
+            data['fields'][str(line_text.group(1))] = str(line_text.group(2))
 
 
         # this assumes that the field is in one line
-        line_password = re.search(b'<input type.*?=.*?"password".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"', line)
+        line_password = re.search('<input type.*?=.*?"password".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"', line)
         if (line_password):
-            logging.debug("found password: " + str(line_password.group(1).decode()) + " = '" + str(line_password.group(2).decode()) + "'")
-            data['fields'][str(line_password.group(1).decode())] = str(line_password.group(2).decode())
+            logging.debug("found password: " + str(line_password.group(1)) + " = '" + str(line_password.group(2)) + "'")
+            data['fields'][str(line_password.group(1))] = str(line_password.group(2))
 
 
         # this deals with multiple lines
-        line_select = re.search(b'<select.*?name.*?=.*?"(.+?)"', line)
+        line_select = re.search('<select.*?name.*?=.*?"(.+?)"', line)
         if (line_select):
-            l3_select2 = re.search(b'<select.*?name.*?=.*?"' + str(line_select.group(1).decode()) + '".*?>(.+?)<\/select>', form3_inner_content, re.DOTALL)
+            l3_select2 = re.search('<select.*?name.*?=.*?"' + str(line_select.group(1)) + '".*?>(.+?)<\/select>', form3_inner_content, re.DOTALL)
             if (l3_select2):
                 try:
-                    l3_select3 = str(l3_select2.group(1).decode())
+                    l3_select3 = str(l3_select2.group(1))
                 except UnicodeDecodeError:
                     l3_select3 = str(l3_select2.group(1))
             else:
-                logging.error("Found select field (" + str(line_select.group(1).decode()) + "), but no option field!")
+                logging.error("Found select field (" + str(line_select.group(1)) + "), but no option field!")
                 sys.exit(1)
 
-            l3_select4 = re.search(b'<option value="([^"]*?)" selected=', l3_select3, re.DOTALL)
+            l3_select4 = re.search('<option value="([^"]*?)" selected=', l3_select3, re.DOTALL)
             if (l3_select4):
                 # found a select option which is preselected
-                data['fields'][str(line_select.group(1).decode())] = str(l3_select4.group(1).decode())
+                data['fields'][str(line_select.group(1))] = str(l3_select4.group(1))
             else:
-                l3_select5 = re.search(b'.*?<option.*?value="(.*?)"', l3_select3, re.DOTALL)
+                l3_select5 = re.search('.*?<option.*?value="(.*?)"', l3_select3, re.DOTALL)
                 if (l3_select5):
-                    data['fields'][str(line_select.group(1).decode())] = str(l3_select5.group(1).decode())
+                    data['fields'][str(line_select.group(1))] = str(l3_select5.group(1))
                 else:
-                    logging.error("Found select field (" + str(line_select.group(1).decode()) + "), but no option field!")
-            logging.debug("found   select: " + str(line_select.group(1).decode()) + " = '" + str(data['fields'][str(line_select.group(1).decode())]) + "'")
+                    logging.error("Found select field (" + str(line_select.group(1)) + "), but no option field!")
+            logging.debug("found   select: " + str(line_select.group(1)) + " = '" + str(data['fields'][str(line_select.group(1))]) + "'")
 
 
         # this deals with multiple lines, but one radio field per line
-        line_radio = re.search(b'<input type.*?=.*?"radio".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"', line)
+        line_radio = re.search('<input type.*?=.*?"radio".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"', line)
         if (line_radio):
             # if it's the 'checked' radio button, overwrite any previous value
-            line_radio2 = re.search(b'<input type.*?=.*?"radio".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"[^>]+checked=', line)
+            line_radio2 = re.search('<input type.*?=.*?"radio".*?name.*?=.*?"(.+?)".*?value.*?="(.*?)"[^>]+checked=', line)
             if (line_radio2):
-                logging.debug("found    radio: " + str(line_radio2.group(1).decode()) + " = '" + str(line_radio2.group(2).decode()) + "'")
-                data['fields'][str(line_radio2.group(1).decode())] = str(line_radio2.group(2).decode())
+                logging.debug("found    radio: " + str(line_radio2.group(1)) + " = '" + str(line_radio2.group(2)) + "'")
+                data['fields'][str(line_radio2.group(1))] = str(line_radio2.group(2))
             else:
                 try:
-                    t = data['fields'][str(line_radio.group(1).decode())]
+                    t = data['fields'][str(line_radio.group(1))]
                 except KeyError:
                     # no previous value stored, must be the first radio button
-                    data['fields'][str(line_radio.group(1).decode())] = str(line_radio.group(2).decode())
-                    logging.debug("found    radio: " + str(line_radio.group(1).decode()) + " = '" + str(line_radio.group(2).decode()) + "'")
+                    data['fields'][str(line_radio.group(1))] = str(line_radio.group(2))
+                    logging.debug("found    radio: " + str(line_radio.group(1)) + " = '" + str(line_radio.group(2)) + "'")
 
     return data
 
@@ -927,7 +928,8 @@ def retrieve_bank_account_data(account, session):
     #       correct links and fields in every page
 
 
-    html = HTMLParser.HTMLParser()
+    #html = HTMLParser.HTMLParser()
+    html = HTMLParser()
     # start on the main website, there is a link to the banking website
     url = 'https://www.' + 'deutsche' + '-' + 'bank' + '.de/'
 
@@ -935,9 +937,9 @@ def retrieve_bank_account_data(account, session):
     # fetch main website
     req = get_url(url, session)
     #print(req)
-    l_r = re.search(b'<a .*?href="(.+?)".*?>.*?Online\-Banking.*?<\/a>', req)
+    l_r = re.search('<a .*?title=".*?Banking.*?".*?href="(.+?trxm.*?)".*?>.*?Online\-Banking.*?<\/a>', req, re.DOTALL)
     if (l_r):
-        url_banking = str(l_r.group(1).decode())
+        url_banking = str(l_r.group(1))
         logging.debug("next link (2): " + url_banking)
     else:
         logging.error("Can't identify link to Online Banking!")
@@ -947,15 +949,17 @@ def retrieve_bank_account_data(account, session):
     # fetch Online Banking page
     req_banking = get_url(url_banking, session)
     req_banking = remove_cookie_consent_box(req_banking)
+    #req_banking = remove_search_box(req_banking)
+    #print(req_banking)
 
     # the result should only have one <form> object
-    l_banking_r_forms = re.search(b'<form.+<form', req_banking, re.DOTALL)
+    l_banking_r_forms = re.search('<form.+<form', req_banking, re.DOTALL)
     if (l_banking_r_forms):
         logging.error("Found multiple forms in login page!")
         sys.exit(1)
 
 
-    l_banking_r_form = re.search(b'(<form.+?action=".+?".*?>.*<\/form>)', req_banking, re.DOTALL)
+    l_banking_r_form = re.search('(<form.+?action=".+?".*?>.*<\/form>)', req_banking, re.DOTALL)
     if (l_banking_r_form):
         form_login_content = str(l_banking_r_form.group(1))
     else:
@@ -999,9 +1003,9 @@ def retrieve_bank_account_data(account, session):
     # need the link to "Konten"
     url_accounts = False
     for line in form_login_content.splitlines(True):
-        l_accounts_r = re.search(b'<a href="(.+?)".*?>Konten<\/a>', req_login)
+        l_accounts_r = re.search('<a href="(.+?)".*?>Konten<\/a>', req_login)
         if (l_accounts_r):
-            url_accounts = urljoin(url_login, str(l_accounts_r.group(1).decode()))
+            url_accounts = urljoin(url_login, str(l_accounts_r.group(1)))
             break
     if (url_accounts is False):
         print("")
@@ -1011,7 +1015,7 @@ def retrieve_bank_account_data(account, session):
     req_accounts = get_url(url_accounts, session)
 
 
-    l_accounts_r_form = re.search(b'(<form.+?id="accountTurnoversForm".+?action=".+?".*?>.*?<\/form>)', req_accounts, re.DOTALL)
+    l_accounts_r_form = re.search('(<form.+?id="accountTurnoversForm".+?action=".+?".*?>.*?<\/form>)', req_accounts, re.DOTALL)
     if (l_accounts_r_form):
         form_accounts_content = str(l_accounts_r_form.group(1))
     else:
@@ -1049,16 +1053,16 @@ def retrieve_bank_account_data(account, session):
     account_data = {}
     account_data['bank_balance'] = None
     account_data['bank_balance_currency'] = None
-    bookings = re.search(b'<... Display bookedTurnovers.+?>(.+?)<... If there are no turnovers existent .+? shown above ..>', req_data, re.DOTALL)
+    bookings = re.search('<... Display bookedTurnovers.+?>(.+?)<... If there are no turnovers existent .+? shown above ..>', req_data, re.DOTALL)
     if (bookings):
         try:
-            bookings_data = str(bookings.group(1).decode())
+            bookings_data = str(bookings.group(1))
         except UnicodeDecodeError:
             bookings_data = str(bookings.group(1))
-        bookings = re.search(b'<tr class="headline">.+?<\/tr>.*?<tr>.+?<\/tr>(.+)$', bookings_data, re.DOTALL)
+        bookings = re.search('<tr class="headline">.+?<\/tr>.*?<tr>.+?<\/tr>(.+)$', bookings_data, re.DOTALL)
         if (bookings):
             try:
-                bookings_data = str(bookings.group(1).decode())
+                bookings_data = str(bookings.group(1))
             except UnicodeDecodeError:
                 bookings_data = str(bookings.group(1))
             #print(bookings_data)
@@ -1089,7 +1093,7 @@ def retrieve_bank_account_data(account, session):
 
 
         for line in bookings_data.splitlines(True):
-            btentry = re.search(b'<td headers="bTentry".*?>([0-9\.]+)</td>', line)
+            btentry = re.search('<td headers="bTentry".*?>([0-9\.]+)</td>', line)
             if (btentry):
                 # first write entry with existing data
                 if (date_of_bookkeeping is not None):
@@ -1140,47 +1144,47 @@ def retrieve_bank_account_data(account, session):
                 # now get the date
                 date_of_bookkeeping = btentry.group(1)
 
-            btvalue = re.search(b'<td headers="bTvalue".*?>([0-9\.]+)</td>', line)
+            btvalue = re.search('<td headers="bTvalue".*?>([0-9\.]+)</td>', line)
             if (btvalue):
                 date_of_value = btvalue.group(1)
 
-            btpurpose = re.search(b'<td headers="bTpurpose".*?>(.*?)</td>', line, re.DOTALL)
+            btpurpose = re.search('<td headers="bTpurpose".*?>(.*?)</td>', line, re.DOTALL)
             if (btpurpose):
-                intended_use = html.unescape(btpurpose.group(1).strip().encode('utf-8'))
+                intended_use = html.unescape(btpurpose.group(1).strip())
 
-            btdebit = re.search(b'<td headers="bTdebit".*?>\s*([0-9\.\-,]+)\s*</td>', line)
+            btdebit = re.search('<td headers="bTdebit".*?>\s*([0-9\.\-,]+)\s*</td>', line)
             if (btdebit):
                 amount = fix_punctation(btdebit.group(1))
 
-            btcredit = re.search(b'<td headers="bTcredit".*?>\s*([0-9\.\-,]+)\s*</td>', line)
+            btcredit = re.search('<td headers="bTcredit".*?>\s*([0-9\.\-,]+)\s*</td>', line)
             if (btcredit):
                 amount = btcredit.group(1)
 
-            btcurrency = re.search(b'<td headers="bTcurrency".*?>(.*?)</td>', line)
+            btcurrency = re.search('<td headers="bTcurrency".*?>(.*?)</td>', line)
             if (btcurrency):
                 currency = btcurrency.group(1).strip()
 
-            btintended_use2 = re.search(b'<td.*?>Verwendungszweck</td><td.*?>(.+?)<\/td>', line)
+            btintended_use2 = re.search('<td.*?>Verwendungszweck</td><td.*?>(.+?)<\/td>', line)
             if (btintended_use2):
-                intended_use2 = html.unescape(btintended_use2.group(1).strip().encode('utf-8'))
+                intended_use2 = html.unescape(btintended_use2.group(1).strip())
 
-            btiban = re.search(b'<td.*?>IBAN</td><td.*?>(.+?)<\/td>', line)
+            btiban = re.search('<td.*?>IBAN</td><td.*?>(.+?)<\/td>', line)
             if (btiban):
                 iban = btiban.group(1).strip()
 
-            btbic = re.search(b'<td.*?>BIC</td><td.*?>(.+?)<\/td>', line)
+            btbic = re.search('<td.*?>BIC</td><td.*?>(.+?)<\/td>', line)
             if (btbic):
                 bic = btbic.group(1).strip()
 
-            btcustomer_reference = re.search(b'<td.*?>Kundenreferenz</td><td.*?>(.+?)<\/td>', line)
+            btcustomer_reference = re.search('<td.*?>Kundenreferenz</td><td.*?>(.+?)<\/td>', line)
             if (btcustomer_reference):
                 customer_reference = btcustomer_reference.group(1).strip()
 
-            btmandate_reference = re.search(b'<td.*?>Mandatsreferenz</td><td.*?>(.+?)<\/td>', line)
+            btmandate_reference = re.search('<td.*?>Mandatsreferenz</td><td.*?>(.+?)<\/td>', line)
             if (btmandate_reference):
                 mandate_reference = btmandate_reference.group(1).strip()
 
-            btcreditor_id = re.search(b'<td.*?>Gl.*?ubiger ID</td><td.*?>(.+?)<\/td>', line)
+            btcreditor_id = re.search('<td.*?>Gl.*?ubiger ID</td><td.*?>(.+?)<\/td>', line)
             if (btcreditor_id):
                 creditor_id = btcreditor_id.group(1).strip()
 
@@ -1190,19 +1194,19 @@ def retrieve_bank_account_data(account, session):
         sys.exit(1)
 
 
-    current_amount = re.search(b'>Aktueller Kontostand<.+?class="balance credit"><strong>\s*([0-9,\.\-]+)\s*<\/strong>', req_data, re.DOTALL | re.MULTILINE)
+    current_amount = re.search('>Aktueller Kontostand<.+?class="balance credit"><strong>\s*([0-9,\.\-]+)\s*<\/strong>', req_data, re.DOTALL | re.MULTILINE)
     if (current_amount):
-        #print(fix_punctation(current_amount.group(1).decode()))
-        account_data['bank_balance'] = str(fix_punctation(current_amount.group(1).decode()))
+        #print(fix_punctation(current_amount.group(1)))
+        account_data['bank_balance'] = str(fix_punctation(current_amount.group(1)))
     else:
         logging.error("")
         logging.error("Missing current amount in retrieved data")
         sys.exit(1)
 
 
-    current_amount_currency = re.search(b'>Aktueller Kontostand<.+?class="balance credit">.+?<\/strong>.+?<strong.*?><acronym.*?>(.+?)<\/acronym', req_data, re.DOTALL | re.MULTILINE)
+    current_amount_currency = re.search('>Aktueller Kontostand<.+?class="balance credit">.+?<\/strong>.+?<strong.*?><acronym.*?>(.+?)<\/acronym', req_data, re.DOTALL | re.MULTILINE)
     if (current_amount_currency):
-        account_data['bank_balance_currency'] = str(current_amount_currency.group(1).decode())
+        account_data['bank_balance_currency'] = str(current_amount_currency.group(1))
     else:
         logging.error("")
         logging.error("Missing current amount currency in retrieved data")
