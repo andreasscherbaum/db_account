@@ -937,13 +937,35 @@ def retrieve_bank_account_data(account, session):
     # fetch main website
     req = get_url(url, session)
     #print(req)
-    l_r = re.search('<a .*?title=".*?Banking.*?".*?href="(.+?trxm.*?)".*?>.*?Online\-Banking.*?<\/a>', req, re.DOTALL)
+    # problem description:
+    # although the regex is made non-greedy, Python still matches from the first <a>
+    # "consuming" everything in front with a .* makes the regex run forever
+    # split by links, remove newlines, then search for the link
+    l_r = re.findall('<a.+?<\/a>', req, re.DOTALL)
     if (l_r):
-        url_banking = str(l_r.group(1))
-        logging.debug("next link (2): " + url_banking)
+        l_r = [l.replace("\n", " ") for l in l_r]
+        #logging.debug(l_r)
     else:
-        logging.error("Can't identify link to Online Banking!")
+        logging.error("Can't identify link to Online Banking (1)!")
         sys.exit(1)
+
+    url_banking = None
+    for l in l_r:
+        l_r2 = re.search('.+?href="(https:.+?trxm.*?)".*?title=".*?Online.Banking.*?">.*?Online\-Banking.*?<\/a>', l)
+        if (l_r2):
+            url_banking = l_r2.group(1)
+            logging.debug("next link (2): " + url_banking)
+            break
+
+    if (url_banking is None):
+        logging.error("Can't identify link to Online Banking (2)!")
+        sys.exit(1)
+
+    if (len(url_banking) > 100):
+        logging.error("Can't identify link to Online Banking (3)!")
+        logging.error("Link too long!")
+        sys.exit(1)
+
 
 
     # fetch Online Banking page
