@@ -54,6 +54,7 @@ from email.mime.text import MIMEText
 
 import html.parser
 from html.parser import HTMLParser
+import html as htmlescape
 
 
 # start with 'info', can be overriden by '-q' later on
@@ -1166,7 +1167,7 @@ def retrieve_bank_account_data(account, session):
 
             btpurpose = re.search('<td headers="bTpurpose".*?>(.*?)</td>', line, re.DOTALL)
             if (btpurpose):
-                intended_use = html.unescape(btpurpose.group(1).strip())
+                intended_use = htmlescape.unescape(btpurpose.group(1).strip())
 
             btdebit = re.search('<td headers="bTdebit".*?>\s*([0-9\.\-,]+)\s*</td>', line)
             if (btdebit):
@@ -1182,7 +1183,7 @@ def retrieve_bank_account_data(account, session):
 
             btintended_use2 = re.search('<td.*?>Verwendungszweck</td><td.*?>(.+?)<\/td>', line)
             if (btintended_use2):
-                intended_use2 = html.unescape(btintended_use2.group(1).strip())
+                intended_use2 = htmlescape.unescape(btintended_use2.group(1).strip())
 
             btiban = re.search('<td.*?>IBAN</td><td.*?>(.+?)<\/td>', line)
             if (btiban):
