@@ -955,7 +955,9 @@ def retrieve_bank_account_data(account, session):
 
     url_banking = None
     for l in l_r:
-        l_r2 = re.search('.+?href="(https:.+?trxm.*?)".*?title=".*?Online.Banking.*?">.*?Online\-Banking.*?<\/a>', l)
+        #print(l)
+        #l_r2 = re.search('.+?href="(https:.+?trxm.*?)".*?title=".*?Online.Banking.*?">.*?Online\-Banking.*?<\/a>', l)
+        l_r2 = re.search('.*?title=".*?Online.Banking.*?".+?href="(https:.+?trxm.*?)">.*?Online\-Banking.*?<\/a>', l)
         if (l_r2):
             url_banking = l_r2.group(1)
             logging.debug("next link (2): " + url_banking)
