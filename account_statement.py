@@ -1067,7 +1067,7 @@ def retrieve_bank_account_data(account, session):
             sys.exit(1)
 
     # set required values
-    data_accounts['fields']['periodDays'] = '180'
+    data_accounts['fields']['periodDays'] = '85'
     data_accounts['fields']['period'] = 'fixedRange'
     data_accounts['fields']['subaccountAndCurrency'] = "%02d" % account['sub_account']
 
