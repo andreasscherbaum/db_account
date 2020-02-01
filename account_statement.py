@@ -52,6 +52,15 @@ import errno
 import smtplib
 from email.mime.text import MIMEText
 
+#_htmlparser_version = False
+#try:
+#    import html.parser
+#    from html.parser import HTMLParser
+#    _htmlparser_version = 3
+#except ImportError:
+#    import HTMLParser
+#    _htmlparser_version = 2
+#from html import unescape
 import html.parser
 from html.parser import HTMLParser
 import html as htmlescape
